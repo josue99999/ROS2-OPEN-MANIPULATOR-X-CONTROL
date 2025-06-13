@@ -1,26 +1,25 @@
-# OpenMANIPULATOR-X: 
+# OpenMANIPULATOR-X: Quick Setup
 
-1. Configurar Dynamixel en modo Effort (Torque Control) con DYNAMIXEL Wizard 2.0.
+1. Configure all Dynamixel actuators to **Effort (Torque Control) mode** using DYNAMIXEL Wizard 2.0.
 
-2. Verificar dispositivo USB:
+2. Verify USB device:
 
     ls /dev/ttyUSB*
 
-   Confirmar que el dispositivo sea `/dev/ttyUSB0`.
+   Confirm the device is `/dev/ttyUSB0`.
 
-3. Añadir usuario al grupo dialout para permisos:
+3. Add your user to the `dialout` group for serial port permissions:
 
     sudo usermod -aG dialout $USER
 
-   Reiniciar sesión.
+   Then, log out and log back in.
 
-4. Asegurar que la velocidad de comunicación (baud rate) esté en 1 Mbps (1000000 bps).
+4. Ensure the communication baud rate is set to **1 Mbps (1000000 bps)**.
 
-5. Ejecutar nodo hardware con compensación de gravedad:
+5. Launch the hardware node with gravity compensation:
 
     ros2 launch open_manipulator_bringup hardware_x.launch.py
 
 ---
 
-Este procedimiento garantiza control torque activo y compensación de gravedad operativa.
-
+This procedure guarantees active torque control and operational gravity compensation.
