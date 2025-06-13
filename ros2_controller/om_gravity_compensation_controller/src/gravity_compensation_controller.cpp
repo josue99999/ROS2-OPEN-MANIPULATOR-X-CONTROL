@@ -139,8 +139,17 @@ controller_interface::return_type GravityCompensationController::update(
       }
     }
 
-    bool set_ok = joint_command_interface_[0][i].get().set_value(
-      torques(i) * params_.torque_scaling_factors[i]);
+    double Kt = (1.666 * 0.00269); // [Nm/mA] para XM430-W350-T
+    double curr_max = 150.0; // mA, máximo permitido por motor
+
+    double current_command = (torques(i) / Kt) * params_.torque_scaling_factors[i];
+
+    // Saturación para no exceder el valor máximo de corriente
+    if (current_command > curr_max) current_command = curr_max;
+    if (current_command < -curr_max) current_command = -curr_max;
+
+    bool set_ok = joint_command_interface_[0][i].get().set_value(current_command);
+
     if (!set_ok) {
       RCLCPP_ERROR(
         get_node()->get_logger(), "Failed to set command value for joint %zu, interface %u", i, 0);

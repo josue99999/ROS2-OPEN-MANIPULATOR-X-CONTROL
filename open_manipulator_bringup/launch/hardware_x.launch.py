@@ -1,40 +1,17 @@
 #!/usr/bin/env python3
-#
-# Copyright 2024 ROBOTIS CO., LTD.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Author: Wonho Yoon, Sungho Woo
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.actions import RegisterEventHandler
 from launch.conditions import IfCondition
-from launch.conditions import UnlessCondition
-from launch.event_handlers import OnProcessExit
-from launch.substitutions import Command
-from launch.substitutions import FindExecutable
-from launch.substitutions import LaunchConfiguration
-from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-
 
 def generate_launch_description():
     # Declare launch arguments
     declared_arguments = [
         DeclareLaunchArgument(
-            'start_rviz', default_value='true', description='Whether to execute rviz2'
+            'start_rviz', default_value='false', description='Whether to execute rviz2'
         ),
         DeclareLaunchArgument(
             'prefix',
@@ -61,11 +38,6 @@ def generate_launch_description():
             default_value='/dev/ttyUSB0',
             description='Port name for hardware connection.',
         ),
-        DeclareLaunchArgument(
-            'run_init_position',
-            default_value='true',
-            description='Run joint_trajectory_executor after launch',
-        ),
     ]
 
     # Launch configurations
@@ -75,8 +47,6 @@ def generate_launch_description():
     use_fake_hardware = LaunchConfiguration('use_fake_hardware')
     fake_sensor_commands = LaunchConfiguration('fake_sensor_commands')
     port_name = LaunchConfiguration('port_name')
-    run_init_position = LaunchConfiguration('run_init_position')
-    trajectory_params_file = LaunchConfiguration('trajectory_params_file')
 
     # Generate URDF file using xacro
     urdf_file = Command([
@@ -89,25 +59,19 @@ def generate_launch_description():
             'open_manipulator_x.urdf.xacro',
         ]),
         ' ',
-        'prefix:=',
-        prefix,
+        'prefix:=', prefix,
         ' ',
-        'use_sim:=',
-        use_sim,
+        'use_sim:=', use_sim,
         ' ',
-        'use_fake_hardware:=',
-        use_fake_hardware,
+        'use_fake_hardware:=', use_fake_hardware,
         ' ',
-        'fake_sensor_commands:=',
-        fake_sensor_commands,
+        'fake_sensor_commands:=', fake_sensor_commands,
         ' ',
-        'port_name:=',
-        port_name,
+        'port_name:=', port_name,
     ])
-
     robot_description = {'robot_description': urdf_file}
 
-    # Paths for configuration files
+    # Path for controller YAML
     controller_manager_config = PathJoinSubstitution([
         FindPackageShare('open_manipulator_bringup'),
         'config',
@@ -115,26 +79,19 @@ def generate_launch_description():
         'hardware_controller_manager.yaml',
     ])
 
+    # Path for RViz config (optional)
     rviz_config_file = PathJoinSubstitution([
         FindPackageShare('open_manipulator_description'),
         'rviz',
         'open_manipulator.rviz',
     ])
 
-    trajectory_params_file = PathJoinSubstitution([
-        FindPackageShare('open_manipulator_bringup'),
-        'config',
-        'om_x',
-        'initial_positions.yaml',
-    ])
-
-    # Define nodes
+    # Nodes
     control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
         parameters=[robot_description, controller_manager_config],
         output='both',
-        condition=UnlessCondition(use_sim),
     )
 
     robot_state_publisher_node = Node(
@@ -144,6 +101,29 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Spawner: Only joint_state_broadcaster and gravity_compensation_controller (¡MODIFICADO!)
+    joint_state_broadcaster_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['joint_state_broadcaster'],
+        output='screen',
+    )
+    gravity_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['gravity_compensation_controller'],
+        output='screen',
+    )
+
+    # Si quieres mantener el effort_controller, puedes dejarlo aquí. Si NO, elimina este bloque.
+    # effort_controller_spawner = Node(
+    #     package='controller_manager',
+    #     executable='spawner',
+    #     arguments=['effort_controller'],
+    #     output='screen',
+    # )
+
+    # RViz (optional)
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -152,48 +132,13 @@ def generate_launch_description():
         condition=IfCondition(start_rviz),
     )
 
-    # Controller spawner node
-    robot_controller_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'arm_controller',
-            'gripper_controller',
-            'joint_state_broadcaster',
-        ],
-        parameters=[robot_description],
-    )
-
-    # Joint trajectory executor node
-    joint_trajectory_executor = Node(
-        package='open_manipulator_bringup',
-        executable='joint_trajectory_executor',
-        parameters=[trajectory_params_file],
-        output='screen',
-        condition=IfCondition(run_init_position),
-    )
-
-    # Event handlers to ensure order of execution
-    delay_rviz_after_joint_state_broadcaster_spawner = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=robot_controller_spawner, on_exit=[rviz_node]
-        )
-    )
-
-    delay_joint_trajectory_executor_after_controllers = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=robot_controller_spawner,
-            on_exit=[joint_trajectory_executor],
-        )
-    )
-
     return LaunchDescription(
-        declared_arguments
-        + [
+        declared_arguments + [
             control_node,
-            robot_controller_spawner,
             robot_state_publisher_node,
-            delay_rviz_after_joint_state_broadcaster_spawner,
-            delay_joint_trajectory_executor_after_controllers,
+            joint_state_broadcaster_spawner,
+            gravity_controller_spawner,
+            # effort_controller_spawner, # Descomenta si lo necesitas
+            rviz_node,
         ]
     )
