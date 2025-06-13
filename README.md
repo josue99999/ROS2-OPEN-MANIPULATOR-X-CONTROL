@@ -1,6 +1,6 @@
 # OpenMANIPULATOR-X: Quick Setup
 
-1. Configure all Dynamixel actuators to **Effort (Torque Control) mode** using DYNAMIXEL Wizard 2.0.
+1. Configure all Dynamixel actuators to **Current (Torque Control) mode** using DYNAMIXEL Wizard 2.0.
 
 2. Verify USB device:
 
